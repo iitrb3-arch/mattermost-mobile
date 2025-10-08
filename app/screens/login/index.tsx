@@ -73,6 +73,22 @@ const getStyles = makeStyleSheetFromTheme((theme: Theme) => ({
         marginBottom: 12,
         ...typography('Body', 200, 'Regular'),
     },
+    footer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 32,
+        gap: 4,
+    },
+    footerText: {
+        color: changeOpacity(theme.centerChannelColor, 0.72),
+        textAlign: 'center',
+        ...typography('Body', 200, 'SemiBold'),
+    },
+    designerText: {
+        color: changeOpacity(theme.centerChannelColor, 0.56),
+        textAlign: 'center',
+        ...typography('Body', 75, 'Regular'),
+    },
 }));
 
 const AnimatedSafeArea = Animated.createAnimatedComponent(SafeAreaView);
@@ -236,6 +252,18 @@ const LoginOptions = ({
                             theme={theme}
                         />
                         }
+                        <View style={styles.footer}>
+                            <FormattedText
+                                id='login.footer.school'
+                                defaultMessage='Andisheh Hosseini Boys Elementary'
+                                style={styles.footerText}
+                            />
+                            <FormattedText
+                                id='login.footer.designer'
+                                defaultMessage='Designed by Farhad Sanayi'
+                                style={styles.designerText}
+                            />
+                        </View>
                     </View>
                 </KeyboardAwareScrollView>
             </AnimatedSafeArea>

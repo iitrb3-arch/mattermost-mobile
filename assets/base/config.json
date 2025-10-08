@@ -1,14 +1,15 @@
 {
     "AuthUrlScheme": "mmauth://",
     "AuthUrlSchemeDev": "mmauthbeta://",
-    "DefaultServerUrl": "",
-    "DefaultServerName": "",
+    "DefaultServerUrl": "https://edu97.ir",
+    "DefaultServerName": "دبستان اندیشه حسینی",
+    "AllowOtherServers": false,
     "TestServerUrl": "http://localhost:8065",
-    "AutoSelectServerUrl": false,
+    "AutoSelectServerUrl": true,
 
-    "WebsiteURL": "https://mattermost.com",
-    "ServerNoticeURL": "https://github.com/mattermost/mattermost-server/blob/master/NOTICE.txt",
-    "MobileNoticeURL": "https://github.com/mattermost/mattermost-mobile/blob/master/NOTICE.txt",
+    "WebsiteURL": "https://edu97.ir",
+    "ServerNoticeURL": "https://edu97.ir",
+    "MobileNoticeURL": "https://edu97.ir",
 
     "RudderApiKey": "",
 
