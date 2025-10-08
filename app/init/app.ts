@@ -15,6 +15,7 @@ import {registerScreens} from '@screens/index';
 import {registerNavigationListeners} from '@screens/navigation';
 import EphemeralStore from '@store/ephemeral_store';
 import NavigationStore from '@store/navigation_store';
+import {checkForUpdates} from '@utils/update_checker';
 
 // Controls whether the main initialization (database, etc...) is done, either on app launch
 // or on the Share Extension, for example.
@@ -66,6 +67,8 @@ export async function start() {
     registerScreens();
 
     await WebsocketManager.init(serverCredentials);
+
+    await checkForUpdates();
 
     initialLaunch();
 }

@@ -98,7 +98,11 @@ const Server = ({
     const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(false);
     const styles = getStyleSheet(theme);
     const {formatMessage} = intl;
-    const disableServerUrl = Boolean(managedConfig?.allowOtherServers === 'false' && managedConfig?.serverUrl);
+    const preventOtherServers = LocalConfig.AllowOtherServers === false;
+    const disableServerUrl = Boolean(
+        (managedConfig?.allowOtherServers === 'false' && managedConfig?.serverUrl) ||
+        preventOtherServers,
+    );
     const additionalServer = launchType === Launch.AddServerFromDeepLink || launchType === Launch.AddServer;
 
     const dismiss = () => {
@@ -111,7 +115,7 @@ const Server = ({
     useEffect(() => {
         let serverName: string | undefined = defaultDisplayName || managedConfig?.serverName || LocalConfig.DefaultServerName;
         let serverUrl: string | undefined = defaultServerUrl || managedConfig?.serverUrl || LocalConfig.DefaultServerUrl;
-        let autoconnect = managedConfig?.allowOtherServers === 'false' || LocalConfig.AutoSelectServerUrl;
+        let autoconnect = managedConfig?.allowOtherServers === 'false' || LocalConfig.AutoSelectServerUrl || preventOtherServers;
 
         if (launchType === Launch.DeepLink || launchType === Launch.AddServerFromDeepLink) {
             const deepLinkServerUrl = (extra as DeepLinkWithData).data?.serverUrl;
@@ -145,7 +149,7 @@ const Server = ({
             // If no other servers are allowed or the local config for AutoSelectServerUrl is set, attempt to connect
             handleConnect(managedConfig?.serverUrl || LocalConfig.DefaultServerUrl);
         }
-    }, [managedConfig?.allowOtherServers, managedConfig?.serverUrl, managedConfig?.serverName, defaultServerUrl]);
+    }, [managedConfig?.allowOtherServers, managedConfig?.serverUrl, managedConfig?.serverName, defaultServerUrl, preventOtherServers]);
 
     useEffect(() => {
         if (url && displayName && !urlError && !preauthSecretError) {
@@ -436,6 +440,7 @@ const Server = ({
                         keyboardAwareRef={keyboardAwareRef}
                         preauthSecret={preauthSecret}
                         preauthSecretError={preauthSecretError}
+                        readOnly={preventOtherServers}
                         setShowAdvancedOptions={setShowAdvancedOptions}
                         showAdvancedOptions={showAdvancedOptions}
                         theme={theme}

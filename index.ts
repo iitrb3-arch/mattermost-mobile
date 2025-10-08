@@ -3,7 +3,7 @@
 
 import {RUNNING_E2E} from '@env';
 import TurboLogger from '@mattermost/react-native-turbo-log';
-import {LogBox, Platform, UIManager} from 'react-native';
+import {I18nManager, LogBox, Platform, UIManager} from 'react-native';
 import ViewReactNativeStyleAttributes from 'react-native/Libraries/Components/View/ReactNativeStyleAttributes';
 import 'react-native-gesture-handler';
 import {Navigation} from 'react-native-navigation';
@@ -38,6 +38,11 @@ if (__DEV__) {
 }
 
 setFontFamily();
+
+I18nManager.allowRTL(true);
+if (!I18nManager.isRTL) {
+    I18nManager.forceRTL(true);
+}
 
 if (global.HermesInternal) {
     // Polyfills required to use Intl with Hermes engine

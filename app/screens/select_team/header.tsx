@@ -6,6 +6,7 @@ import React, {useCallback, useMemo, useRef} from 'react';
 import {useIntl} from 'react-intl';
 import {Text, View} from 'react-native';
 
+import LocalConfig from '@assets/config.json';
 import {logout} from '@actions/remote/session';
 import TouchableWithFeedback from '@components/touchable_with_feedback';
 import {useServerDisplayName, useServerUrl} from '@context/server';
@@ -50,7 +51,7 @@ function Header() {
     const serverDisplayName = useServerDisplayName();
     const serverUrl = useServerUrl();
     const managedConfig = useManagedConfig<ManagedConfig>();
-    const canAddOtherServers = managedConfig?.allowOtherServers !== 'false';
+    const canAddOtherServers = LocalConfig.AllowOtherServers !== false && managedConfig?.allowOtherServers !== 'false';
     const serverButtonRef = useRef<ServersRef>(null);
 
     const headerStyle = useMemo(() => ({...styles.header, marginLeft: canAddOtherServers ? MARGIN_WITH_SERVER_ICON : undefined}), [canAddOtherServers]);

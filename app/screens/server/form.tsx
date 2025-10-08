@@ -30,6 +30,7 @@ type Props = {
     keyboardAwareRef: RefObject<KeyboardAwareScrollView>;
     preauthSecret?: string;
     preauthSecretError?: string;
+    readOnly?: boolean;
     setShowAdvancedOptions: React.Dispatch<React.SetStateAction<boolean>>;
     showAdvancedOptions: boolean;
     theme: Theme;
@@ -127,6 +128,7 @@ const ServerForm = ({
     keyboardAwareRef,
     preauthSecret = '',
     preauthSecretError,
+    readOnly = false,
     setShowAdvancedOptions,
     showAdvancedOptions,
     theme,
@@ -187,7 +189,7 @@ const ServerForm = ({
                     rawInput={true}
                     autoFocus={autoFocus}
                     enablesReturnKeyAutomatically={true}
-                    editable={!disableServerUrl}
+                    editable={!disableServerUrl && !readOnly}
                     error={urlError}
                     keyboardType='url'
                     label={formatMessage({
@@ -217,10 +219,11 @@ const ServerForm = ({
                     testID='server_form.server_display_name.input'
                     theme={theme}
                     value={displayName}
+                    editable={!readOnly}
                 />
             </View>
 
-            {!displayNameError &&
+            {!displayNameError && !readOnly &&
             <FormattedText
                 defaultMessage={'Choose a display name for your server'}
                 id={'mobile.components.select_server_view.displayHelp'}
@@ -229,6 +232,7 @@ const ServerForm = ({
             />
             }
 
+            {!readOnly &&
             <Animated.View style={[styles.advancedOptionsContainer, advancedOptionsStyle]}>
                 <Pressable
                     onPress={toggleAdvancedOptions}
@@ -277,6 +281,7 @@ const ServerForm = ({
                     </Animated.View>
                 )}
             </Animated.View>
+            }
 
             <View style={styles.connectButtonContainer}>
                 <Button

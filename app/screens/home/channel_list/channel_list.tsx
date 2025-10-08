@@ -3,33 +3,41 @@
 
 import {useManagedConfig} from '@mattermost/react-native-emm';
 import {useIsFocused, useNavigation, useRoute} from '@react-navigation/native';
-import React, {useCallback, useEffect} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {useIntl} from 'react-intl';
-import {BackHandler, DeviceEventEmitter, StyleSheet, ToastAndroid, View} from 'react-native';
+import {Alert, BackHandler, DeviceEventEmitter, StyleSheet, ToastAndroid, View} from 'react-native';
 import Animated, {useAnimatedStyle, withTiming} from 'react-native-reanimated';
 import {type Edge, SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 
+import LocalConfig from '@assets/config.json';
+import {savePreference} from '@actions/remote/preference';
 import {refetchCurrentUser} from '@actions/remote/user';
 import FloatingCallContainer from '@calls/components/floating_call_container';
 import AnnouncementBanner from '@components/announcement_banner';
 import ConnectionBanner from '@components/connection_banner';
 import TeamSidebar from '@components/team_sidebar';
 import {Navigation as NavigationConstants, Screens} from '@constants';
+import {Preferences} from '@constants/preferences';
 import {useServerUrl} from '@context/server';
 import {useTheme} from '@context/theme';
 import {useIsTablet} from '@hooks/device';
 import PerformanceMetricsManager from '@managers/performance_metrics_manager';
+import DatabaseManager from '@database/manager';
 import {resetToTeams, openToS} from '@screens/navigation';
 import NavigationStore from '@store/navigation_store';
 import {isMainActivity} from '@utils/helpers';
+import {logError} from '@utils/log';
 import {tryRunAppReview} from '@utils/reviews';
 import {addSentryContext} from '@utils/sentry';
+import {getCurrentUserId} from '@queries/servers/system';
 
 import AdditionalTabletView from './additional_tablet_view';
 import CategoriesList from './categories_list';
 import Servers from './servers';
 
 import type {LaunchType} from '@typings/launch';
+import type UserModel from '@typings/database/models/servers/user';
+import type PreferenceType from '@typings/api/preferences';
 
 type ChannelProps = {
     hasChannels: boolean;
@@ -43,6 +51,9 @@ type ChannelProps = {
     currentUserId?: string;
     hasCurrentUser: boolean;
     showIncomingCalls: boolean;
+    currentUser?: UserModel;
+    morningGreetingEnabled: boolean;
+    lastMorningGreeting?: string;
 };
 
 const edges: Edge[] = ['bottom', 'left', 'right'];
@@ -80,7 +91,9 @@ const ChannelListScreen = (props: ChannelProps) => {
     const insets = useSafeAreaInsets();
     const serverUrl = useServerUrl();
     const params = route.params as {direction: string};
-    const canAddOtherServers = managedConfig?.allowOtherServers !== 'false';
+    const localAllowOtherServers = LocalConfig.AllowOtherServers !== false;
+    const canAddOtherServers = localAllowOtherServers && managedConfig?.allowOtherServers !== 'false';
+    const [hasShownGreeting, setHasShownGreeting] = useState(false);
 
     const handleBackPress = useCallback(() => {
         const isHomeScreen = NavigationStore.getVisibleScreen() === Screens.HOME;
@@ -174,6 +187,63 @@ const ChannelListScreen = (props: ChannelProps) => {
         PerformanceMetricsManager.finishLoad('HOME', serverUrl);
         PerformanceMetricsManager.measureTimeToInteraction();
     }, []);
+
+    useEffect(() => {
+        const maybeShowGreeting = async () => {
+            if (!props.morningGreetingEnabled || hasShownGreeting) {
+                return;
+            }
+
+            if (!props.currentUser) {
+                return;
+            }
+
+            const now = new Date();
+            const hour = now.getHours();
+            if (hour < 5 || hour >= 12) {
+                return;
+            }
+
+            const todayKey = now.toISOString().slice(0, 10);
+            if (props.lastMorningGreeting === todayKey) {
+                return;
+            }
+
+            const name = props.currentUser.first_name?.trim().length ? props.currentUser.first_name.trim() : props.currentUser.username;
+            const greetingName = name || intl.formatMessage({id: 'greeting.morning.fallbackName', defaultMessage: 'student'});
+
+            Alert.alert(
+                intl.formatMessage({id: 'greeting.morning.title', defaultMessage: 'Good morning'}),
+                intl.formatMessage({id: 'greeting.morning.message', defaultMessage: 'Good morning, {name}! Welcome to school.'}, {name: greetingName}),
+            );
+            setHasShownGreeting(true);
+
+            try {
+                const {database} = DatabaseManager.getServerDatabaseAndOperator(serverUrl);
+                const userId = await getCurrentUserId(database);
+                const pref: PreferenceType = {
+                    category: Preferences.CATEGORIES.MORNING_GREETING,
+                    name: 'last_shown',
+                    user_id: userId,
+                    value: todayKey,
+                };
+                await savePreference(serverUrl, [pref]);
+            } catch (error) {
+                logError('Failed to persist morning greeting state', error);
+            }
+        };
+
+        maybeShowGreeting();
+    }, [
+        props.morningGreetingEnabled,
+        props.currentUser?.id,
+        props.currentUser?.first_name,
+        props.currentUser?.username,
+        props.lastMorningGreeting,
+        intl,
+        serverUrl,
+        hasShownGreeting,
+    ]);
 
     return (
         <>

@@ -2,7 +2,6 @@
 // See LICENSE.txt for license information.
 
 import {useManagedConfig} from '@mattermost/react-native-emm';
-import {Button as RNEButton} from '@rneui/base';
 import React, {useCallback, useEffect, useMemo, useRef, useState, type RefObject} from 'react';
 import {defineMessages, useIntl} from 'react-intl';
 import {Keyboard, TextInput, TouchableOpacity, View} from 'react-native';
@@ -11,14 +10,12 @@ import {login} from '@actions/remote/session';
 import Button from '@components/button';
 import CompassIcon from '@components/compass_icon';
 import FloatingTextInput from '@components/floating_input/floating_text_input_label';
-import FormattedText from '@components/formatted_text';
-import {FORGOT_PASSWORD, MFA} from '@constants/screens';
+import {MFA} from '@constants/screens';
 import {useAvoidKeyboard} from '@hooks/device';
 import {usePreventDoubleTap} from '@hooks/utils';
 import {goToScreen, loginAnimationOptions, resetToHome} from '@screens/navigation';
 import {getFullErrorMessage, getServerError, isErrorWithMessage, isServerError} from '@utils/errors';
 import {changeOpacity, makeStyleSheetFromTheme} from '@utils/theme';
-import {tryOpenURL} from '@utils/url';
 
 import type {LaunchProps} from '@typings/launch';
 import type {KeyboardAwareScrollView} from 'react-native-keyboard-aware-scroll-view';
@@ -38,19 +35,6 @@ const getStyleSheet = makeStyleSheetFromTheme((theme: Theme) => ({
     container: {
         marginBottom: 24,
         gap: 24,
-    },
-    forgotPasswordBtn: {
-        backgroundColor: 'transparent',
-        paddingHorizontal: 0,
-        paddingVertical: 0,
-        justifyContent: 'flex-start',
-        borderColor: 'transparent',
-        width: '60%',
-    },
-    forgotPasswordTxt: {
-        color: theme.buttonBg,
-        fontSize: 14,
-        fontFamily: 'OpenSans-SemiBold',
     },
     loginButtonContainer: {
         marginTop: 20,
@@ -91,10 +75,6 @@ const LoginForm = ({config, extra, keyboardAwareRef, serverDisplayName, launchEr
     const [password, setPassword] = useState<string>('');
     const [buttonDisabled, setButtonDisabled] = useState(true);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-    const emailEnabled = config.EnableSignInWithEmail === 'true';
-    const usernameEnabled = config.EnableSignInWithUsername === 'true';
-    const ldapEnabled = license.IsLicensed === 'true' && config.EnableLdap === 'true' && license.LDAP === 'true';
-
     useAvoidKeyboard(keyboardAwareRef);
 
     const goToHome = useCallback((loginError?: unknown) => {
@@ -112,7 +92,7 @@ const LoginForm = ({config, extra, keyboardAwareRef, serverDisplayName, launchEr
             if (errorId === 'api.user.login.invalid_credentials_email_username' || (!isErrorWithMessage(loginError) && typeof loginError !== 'string')) {
                 return intl.formatMessage({
                     id: 'login.invalid_credentials',
-                    defaultMessage: 'The email and password combination is incorrect',
+                    defaultMessage: 'The national ID you entered is incorrect',
                 });
             }
         }
@@ -140,7 +120,7 @@ const LoginForm = ({config, extra, keyboardAwareRef, serverDisplayName, launchEr
     }, [getLoginErrorMessage, goToMfa]);
 
     const signIn = useCallback(async () => {
-        const result: LoginActionResponse = await login(serverUrl!, {serverDisplayName, loginId: loginId.toLowerCase(), password, config, license});
+        const result: LoginActionResponse = await login(serverUrl!, {serverDisplayName, loginId, password, config, license});
         if (checkLoginResponse(result)) {
             goToHome(result.error);
         }
@@ -152,39 +132,6 @@ const LoginForm = ({config, extra, keyboardAwareRef, serverDisplayName, launchEr
         Keyboard.dismiss();
         signIn();
     }, [signIn]));
-
-    const createLoginPlaceholder = () => {
-        const {formatMessage} = intl;
-        const loginPlaceholders = [];
-
-        if (emailEnabled) {
-            loginPlaceholders.push(formatMessage({id: 'login.email', defaultMessage: 'Email'}));
-        }
-
-        if (usernameEnabled) {
-            loginPlaceholders.push(formatMessage({id: 'login.username', defaultMessage: 'Username'}));
-        }
-
-        if (ldapEnabled) {
-            if (config.LdapLoginFieldName) {
-                loginPlaceholders.push(config.LdapLoginFieldName);
-            } else {
-                loginPlaceholders.push(formatMessage({id: 'login.ldapUsername', defaultMessage: 'AD/LDAP Username'}));
-            }
-        }
-
-        if (loginPlaceholders.length >= 2) {
-            return loginPlaceholders.slice(0, loginPlaceholders.length - 1).join(', ') +
-                ` ${formatMessage({id: 'login.or', defaultMessage: 'or'})} ` +
-                loginPlaceholders[loginPlaceholders.length - 1];
-        }
-
-        if (loginPlaceholders.length === 1) {
-            return loginPlaceholders[0];
-        }
-
-        return '';
-    };
 
     const focusPassword = useCallback(() => {
         passwordRef?.current?.focus();
@@ -208,20 +155,6 @@ const LoginForm = ({config, extra, keyboardAwareRef, serverDisplayName, launchEr
             setError(undefined);
         }
     }, [error]);
-
-    const onPressForgotPassword = useCallback(() => {
-        if (config.ForgotPasswordLink) {
-            tryOpenURL(config.ForgotPasswordLink);
-            return;
-        }
-
-        const passProps = {
-            theme,
-            serverUrl,
-        };
-
-        goToScreen(FORGOT_PASSWORD, '', passProps, loginAnimationOptions());
-    }, [config.ForgotPasswordLink, serverUrl, theme]);
 
     const togglePasswordVisiblity = useCallback(() => {
         setIsPasswordVisible((prevState) => !prevState);
@@ -279,12 +212,12 @@ const LoginForm = ({config, extra, keyboardAwareRef, serverDisplayName, launchEr
             <FloatingTextInput
                 rawInput={true}
                 blurOnSubmit={false}
-                autoComplete='email'
+                autoComplete='off'
                 disableFullscreenUI={true}
                 enablesReturnKeyAutomatically={true}
                 error={error ? ' ' : ''}
-                keyboardType='email-address'
-                label={createLoginPlaceholder()}
+                keyboardType='number-pad'
+                label={intl.formatMessage({id: 'login.national_id', defaultMessage: 'National ID'})}
                 onChangeText={onLoginChange}
                 onSubmitEditing={focusPassword}
                 ref={loginRef}
@@ -301,8 +234,8 @@ const LoginForm = ({config, extra, keyboardAwareRef, serverDisplayName, launchEr
                 disableFullscreenUI={true}
                 enablesReturnKeyAutomatically={true}
                 error={error}
-                keyboardType={isPasswordVisible ? 'visible-password' : 'default'}
-                label={intl.formatMessage({id: 'login.password', defaultMessage: 'Password'})}
+                keyboardType='number-pad'
+                label={intl.formatMessage({id: 'login.national_id', defaultMessage: 'National ID'})}
                 onChangeText={onPasswordChange}
                 onSubmitEditing={onLogin}
                 ref={passwordRef}
@@ -313,20 +246,6 @@ const LoginForm = ({config, extra, keyboardAwareRef, serverDisplayName, launchEr
                 value={password}
                 endAdornment={endAdornment}
             />
-
-            {(emailEnabled || usernameEnabled) && config.PasswordEnableForgotLink !== 'false' && (
-                <RNEButton
-                    onPress={onPressForgotPassword}
-                    buttonStyle={styles.forgotPasswordBtn}
-                    testID='login_form.forgot_password.button'
-                >
-                    <FormattedText
-                        id='login.forgot'
-                        defaultMessage='Forgot your password?'
-                        style={styles.forgotPasswordTxt}
-                    />
-                </RNEButton>
-            )}
             {proceedButton}
         </View>
     );
