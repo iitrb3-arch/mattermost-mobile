@@ -1,4 +1,4 @@
-name: Build Mattermost Mobile APK
+name: Build Mattermost Mobile APK (Release Signed)
 
 on:
   workflow_dispatch:
@@ -21,6 +21,11 @@ jobs:
       - name: Install yarn
         run: npm install -g yarn
 
+      - name: Configure Git identity
+        run: |
+          git config --global user.email "iitrb3@gmail.com"
+          git config --global user.name "iitrb3-arch"
+
       - name: Install dependencies
         run: yarn install
 
@@ -30,12 +35,27 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Build Android APK (Debug)
-        working-directory: android
-        run: ./gradlew assembleDebug
+      - name: Generate keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias matterkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass mypass123 \
+            -keypass mypass123 \
+            -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
 
-      - name: Upload APK artifact
+      - name: Build Android Release APK
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=../release.keystore \
+            -Pandroid.injected.signing.store.password=mypass123 \
+            -Pandroid.injected.signing.key.alias=matterkey \
+            -Pandroid.injected.signing.key.password=mypass123
+
+      - name: Upload Signed Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: mattermost-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: mattermost-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
