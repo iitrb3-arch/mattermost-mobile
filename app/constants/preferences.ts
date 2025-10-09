@@ -9,6 +9,7 @@ export const CATEGORIES_TO_KEEP = {
     GROUP_CHANNEL_SHOW: 'group_channel_show',
     DISPLAY_SETTINGS: 'display_settings',
     EMOJI: 'emoji',
+    MORNING_GREETING: 'morning_greeting',
     NOTIFICATIONS: 'notifications',
     SAVED_POST: 'flagged_post',
     SIDEBAR_SETTINGS: 'sidebar_settings',

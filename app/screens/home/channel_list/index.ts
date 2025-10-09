@@ -7,6 +7,8 @@ import {distinctUntilChanged, switchMap} from 'rxjs/operators';
 
 import {observeIncomingCalls} from '@calls/state';
 import {queryAllMyChannelsForTeam} from '@queries/servers/channel';
+import {Preferences} from '@constants/preferences';
+import {queryPreferencesByCategoryAndName} from '@queries/servers/preference';
 import {observeCurrentTeamId, observeCurrentUserId, observeLicense} from '@queries/servers/system';
 import {queryMyTeams} from '@queries/servers/team';
 import {observeShowToS} from '@queries/servers/terms_of_service';
@@ -52,6 +54,15 @@ const enhanced = withObservables([], ({database}: WithDatabaseArgs) => {
             distinctUntilChanged(),
         ),
         showIncomingCalls,
+        currentUser: observeCurrentUser(database),
+        morningGreetingEnabled: queryPreferencesByCategoryAndName(database, Preferences.CATEGORIES.MORNING_GREETING, 'enabled').observe().pipe(
+            switchMap((prefs) => of$(prefs[0]?.value !== 'false')),
+            distinctUntilChanged(),
+        ),
+        lastMorningGreeting: queryPreferencesByCategoryAndName(database, Preferences.CATEGORIES.MORNING_GREETING, 'last_shown').observe().pipe(
+            switchMap((prefs) => of$(prefs[0]?.value || '')),
+            distinctUntilChanged(),
+        ),
     };
 });
 

@@ -2,25 +2,32 @@
 // See LICENSE.txt for license information.
 
 import {withDatabase, withObservables} from '@nozbe/watermelondb/react';
-import {of as of$} from 'rxjs';
-import {switchMap} from 'rxjs/operators';
+import {map} from 'rxjs/operators';
 
+import {Preferences} from '@constants/preferences';
+import {queryPreferencesByCategoryAndName} from '@queries/servers/preference';
 import {observeConfigValue} from '@queries/servers/system';
-import {isValidUrl} from '@utils/url';
 
 import Settings from './settings';
 
 import type {WithDatabaseArgs} from '@typings/database/database';
 
 const enhanced = withObservables([], ({database}: WithDatabaseArgs) => {
-    const helpLink = observeConfigValue(database, 'HelpLink');
-    const showHelp = helpLink.pipe(switchMap((link: string) => of$(link ? isValidUrl(link) : false)));
     const siteName = observeConfigValue(database, 'SiteName');
+    const morningGreetingEnabled = queryPreferencesByCategoryAndName(database, Preferences.CATEGORIES.MORNING_GREETING, 'enabled').observe().pipe(
+        map((prefs) => {
+            const value = prefs[0]?.value;
+            if (value === undefined) {
+                return true;
+            }
+
+            return value !== 'false';
+        }),
+    );
 
     return {
-        helpLink,
-        showHelp,
         siteName,
+        morningGreetingEnabled,
     };
 });
 

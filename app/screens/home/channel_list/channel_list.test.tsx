@@ -36,6 +36,9 @@ function getBaseProps(): ComponentProps<typeof ChannelListScreen> {
         showIncomingCalls: true,
         showToS: false,
         currentUserId: 'someId',
+        currentUser: undefined,
+        morningGreetingEnabled: true,
+        lastMorningGreeting: undefined,
     };
 }
 
