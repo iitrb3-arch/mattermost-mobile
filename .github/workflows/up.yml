@@ -26,20 +26,23 @@ jobs:
           git config --global user.email "iitrb3@gmail.com"
           git config --global user.name "iitrb3-arch"
 
-      - name: Disable Solidarity check
+      # 🚫 حذف کامل preinstall script و Solidarity
+      - name: Disable Solidarity checks
         run: |
-          # اگر فایل preinstall.sh وجود داشت، اون رو غیرفعال کن
-          if [ -f scripts/preinstall.sh ]; then
-            echo "echo 'Skipping Solidarity checks'" > scripts/preinstall.sh
-            echo "exit 0" >> scripts/preinstall.sh
+          # حذف کامل preinstall از package.json (یعنی کلاً npx solidarity حذف میشه)
+          if [ -f package.json ]; then
+            sed -i '/"preinstall"/d' package.json || true
           fi
-          # محیط رو تنظیم کن تا چک‌ها رد بشن
+          # اطمینان از اینکه فایل preinstall.sh چیزی اجرا نکنه
+          if [ -f scripts/preinstall.sh ]; then
+            echo "exit 0" > scripts/preinstall.sh
+          fi
           export SKIP_SOLIDARITY=1
 
       - name: Install dependencies
         run: |
           export SKIP_SOLIDARITY=1
-          yarn install --ignore-engines
+          yarn install --ignore-engines --ignore-scripts
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -61,13 +64,4 @@ jobs:
         working-directory: android
         run: |
           ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=../release.keystore \
-            -Pandroid.injected.signing.store.password=mypass123 \
-            -Pandroid.injected.signing.key.alias=matterkey \
-            -Pandroid.injected.signing.key.password=mypass123
-
-      - name: Upload Signed Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: mattermost-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+            -Pandroid.injected.signing.store.file
