@@ -61,11 +61,12 @@ jobs:
         run: |
           sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' android/app/build.gradle || true
           sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' android/build.gradle || true
+          sed -i 's/targetSdkVersion *[0-9][0-9]*/targetSdkVersion 34/' android/app/build.gradle || true
 
       - name: Build Android Release APK
         working-directory: android
         run: |
-          ./gradlew assembleRelease \
+          ./gradlew assembleRelease --warning-mode all \
             -Pandroid.injected.signing.store.file=../release.keystore \
             -Pandroid.injected.signing.store.password=mypass123 \
             -Pandroid.injected.signing.key.alias=matterkey \
