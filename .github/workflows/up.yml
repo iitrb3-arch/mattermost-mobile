@@ -66,57 +66,17 @@ jobs:
             sed -i 's/jcenter()/mavenCentral()/' "$file" || true
           done
 
-      # 🔍 مرحله‌ی جدید برای نمایش ساختار فایل‌ها
-      - name: Debug - list project files
+      # 👇 جدید: نمایش دقیق فایل‌های جاوااسکریپت برای یافتن entry file
+      - name: Deep debug - show all JS files (depth 5)
         run: |
-          echo "🗂 Listing project structure (showing .js, .jsx, .tsx files)..."
-          find . -maxdepth 3 -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.tsx" \) | sort || true
-          echo "✅ Done listing files."
+          echo "📂 Listing all possible entry files up to 5 levels deep..."
+          find . -maxdepth 5 -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.tsx" \) | sort
+          echo "✅ Above is your file list. Look for something like index.js, app.js, main.js, or mattermost.js"
+          echo "⚠️ Copy the correct relative path (like src/app/index.js) and send it to me."
 
-      # 🔎 تشخیص خودکار entry file از بین فایل‌های موجود
-      - name: Detect entry file for JS bundle
-        id: detect-entry
+      # ⛔️ در این مرحله دیگه حدس نمی‌زنه؛ فقط نمایش می‌ده
+      - name: Stop build if entry not set
         run: |
-          echo "🔎 Detecting entry file..."
-          if [ -f "index.js" ]; then echo "entry=index.js" >> $GITHUB_ENV; echo "✅ Found index.js";
-          elif [ -f "index.android.js" ]; then echo "entry=index.android.js" >> $GITHUB_ENV; echo "✅ Found index.android.js";
-          elif [ -f "src/index.js" ]; then echo "entry=src/index.js" >> $GITHUB_ENV; echo "✅ Found src/index.js";
-          elif [ -f "app/index.js" ]; then echo "entry=app/index.js" >> $GITHUB_ENV; echo "✅ Found app/index.js";
-          elif [ -f "app/mattermost.js" ]; then echo "entry=app/mattermost.js" >> $GITHUB_ENV; echo "✅ Found app/mattermost.js";
-          elif [ -f "app/mattermost.tsx" ]; then echo "entry=app/mattermost.tsx" >> $GITHUB_ENV; echo "✅ Found app/mattermost.tsx";
-          elif [ -f "app/start.js" ]; then echo "entry=app/start.js" >> $GITHUB_ENV; echo "✅ Found app/start.js";
-          elif [ -f "app/start.tsx" ]; then echo "entry=app/start.tsx" >> $GITHUB_ENV; echo "✅ Found app/start.tsx";
-          else
-            echo "❌ No entry file found. Please check the list above in the 'Debug - list project files' step.";
-            exit 1;
-          fi
-          echo "Using entry file: $entry"
-
-      - name: Build JS bundle manually (auto-detected entry)
-        run: |
-          export NODE_OPTIONS="--max_old_space_size=4096"
-          mkdir -p android/app/src/main/assets
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file ${{ env.entry }} \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res \
-            --reset-cache
-
-      - name: Build Android Release APK
-        working-directory: android
-        run: |
-          export NODE_OPTIONS="--max_old_space_size=4096"
-          ./gradlew clean
-          ./gradlew assembleRelease --no-daemon --warning-mode all \
-            -Pandroid.injected.signing.store.file=../release.keystore \
-            -Pandroid.injected.signing.store.password=mypass123 \
-            -Pandroid.injected.signing.key.alias=matterkey \
-            -Pandroid.injected.signing.key.password=mypass123
-
-      - name: Upload Signed Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: mattermost-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          echo "❌ No entry file set yet. Please check the 'Deep debug' step output above."
+          echo "ℹ️ Once you find the correct entry file, tell me its path (for example: src/app/mattermost.js)"
+          exit 1
