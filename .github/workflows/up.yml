@@ -66,14 +66,25 @@ jobs:
             sed -i 's/jcenter()/mavenCentral()/' "$file" || true
           done
 
-      - name: Build JS bundle manually (to bypass metro alias bug)
+      - name: Detect entry file for JS bundle
+        id: detect-entry
+        run: |
+          if [ -f "index.js" ]; then echo "entry=index.js" >> $GITHUB_ENV;
+          elif [ -f "index.android.js" ]; then echo "entry=index.android.js" >> $GITHUB_ENV;
+          elif [ -f "src/index.js" ]; then echo "entry=src/index.js" >> $GITHUB_ENV;
+          elif [ -f "app/index.js" ]; then echo "entry=app/index.js" >> $GITHUB_ENV;
+          elif [ -f "app/mattermost.js" ]; then echo "entry=app/mattermost.js" >> $GITHUB_ENV;
+          else echo "❌ No entry file found"; exit 1; fi
+          echo "✅ Using entry file: $entry"
+
+      - name: Build JS bundle manually (auto-detected entry)
         run: |
           export NODE_OPTIONS="--max_old_space_size=4096"
           mkdir -p android/app/src/main/assets
           npx react-native bundle \
             --platform android \
             --dev false \
-            --entry-file app/mattermost.js \
+            --entry-file ${{ env.entry }} \
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res \
             --reset-cache
