@@ -57,11 +57,14 @@ jobs:
             -keypass mypass123 \
             -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
 
-      - name: Fix compileSdkVersion for Java 17+
+      # 🔧 بالا بردن compileSdkVersion و targetSdkVersion در کل پروژه
+      - name: Patch all Gradle files
         run: |
-          sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' android/app/build.gradle || true
-          sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' android/build.gradle || true
-          sed -i 's/targetSdkVersion *[0-9][0-9]*/targetSdkVersion 34/' android/app/build.gradle || true
+          find android -type f -name "build.gradle" -print0 | while IFS= read -r -d '' file; do
+            sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' "$file" || true
+            sed -i 's/targetSdkVersion *[0-9][0-9]*/targetSdkVersion 34/' "$file" || true
+            sed -i 's/jcenter()/mavenCentral()/' "$file" || true
+          done
 
       - name: Build Android Release APK
         working-directory: android
