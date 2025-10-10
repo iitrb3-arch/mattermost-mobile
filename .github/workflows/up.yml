@@ -57,21 +57,28 @@ jobs:
             -keypass mypass123 \
             -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
 
-      # 🚀 پچ همه‌ی build.gradle ها (حتی داخل node_modules)
       - name: Patch all Gradle files deeply
         run: |
-          echo "Patching Gradle files for compileSdkVersion and repositories..."
+          echo "Patching Gradle files for compileSdkVersion..."
           find . -type f -name "build.gradle" -print0 | while IFS= read -r -d '' file; do
             sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' "$file" || true
             sed -i 's/targetSdkVersion *[0-9][0-9]*/targetSdkVersion 34/' "$file" || true
             sed -i 's/jcenter()/mavenCentral()/' "$file" || true
           done
-          echo "Done patching all Gradle files."
+
+      - name: Prepare metro bundler environment
+        run: |
+          rm -rf $HOME/.gradle/caches/
+          rm -rf node_modules/.cache/
+          export NODE_OPTIONS="--max_old_space_size=4096"
+          echo "Metro cache cleared and Node memory increased."
 
       - name: Build Android Release APK
         working-directory: android
         run: |
-          ./gradlew assembleRelease --warning-mode all \
+          export NODE_OPTIONS="--max_old_space_size=4096"
+          ./gradlew clean
+          ./gradlew assembleRelease --no-daemon --warning-mode all \
             -Pandroid.injected.signing.store.file=../release.keystore \
             -Pandroid.injected.signing.store.password=mypass123 \
             -Pandroid.injected.signing.key.alias=matterkey \
