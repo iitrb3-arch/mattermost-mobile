@@ -66,16 +66,31 @@ jobs:
             sed -i 's/jcenter()/mavenCentral()/' "$file" || true
           done
 
+      # 🔍 مرحله‌ی جدید برای نمایش ساختار فایل‌ها
+      - name: Debug - list project files
+        run: |
+          echo "🗂 Listing project structure (showing .js, .jsx, .tsx files)..."
+          find . -maxdepth 3 -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.tsx" \) | sort || true
+          echo "✅ Done listing files."
+
+      # 🔎 تشخیص خودکار entry file از بین فایل‌های موجود
       - name: Detect entry file for JS bundle
         id: detect-entry
         run: |
-          if [ -f "index.js" ]; then echo "entry=index.js" >> $GITHUB_ENV;
-          elif [ -f "index.android.js" ]; then echo "entry=index.android.js" >> $GITHUB_ENV;
-          elif [ -f "src/index.js" ]; then echo "entry=src/index.js" >> $GITHUB_ENV;
-          elif [ -f "app/index.js" ]; then echo "entry=app/index.js" >> $GITHUB_ENV;
-          elif [ -f "app/mattermost.js" ]; then echo "entry=app/mattermost.js" >> $GITHUB_ENV;
-          else echo "❌ No entry file found"; exit 1; fi
-          echo "✅ Using entry file: $entry"
+          echo "🔎 Detecting entry file..."
+          if [ -f "index.js" ]; then echo "entry=index.js" >> $GITHUB_ENV; echo "✅ Found index.js";
+          elif [ -f "index.android.js" ]; then echo "entry=index.android.js" >> $GITHUB_ENV; echo "✅ Found index.android.js";
+          elif [ -f "src/index.js" ]; then echo "entry=src/index.js" >> $GITHUB_ENV; echo "✅ Found src/index.js";
+          elif [ -f "app/index.js" ]; then echo "entry=app/index.js" >> $GITHUB_ENV; echo "✅ Found app/index.js";
+          elif [ -f "app/mattermost.js" ]; then echo "entry=app/mattermost.js" >> $GITHUB_ENV; echo "✅ Found app/mattermost.js";
+          elif [ -f "app/mattermost.tsx" ]; then echo "entry=app/mattermost.tsx" >> $GITHUB_ENV; echo "✅ Found app/mattermost.tsx";
+          elif [ -f "app/start.js" ]; then echo "entry=app/start.js" >> $GITHUB_ENV; echo "✅ Found app/start.js";
+          elif [ -f "app/start.tsx" ]; then echo "entry=app/start.tsx" >> $GITHUB_ENV; echo "✅ Found app/start.tsx";
+          else
+            echo "❌ No entry file found. Please check the list above in the 'Debug - list project files' step.";
+            exit 1;
+          fi
+          echo "Using entry file: $entry"
 
       - name: Build JS bundle manually (auto-detected entry)
         run: |
