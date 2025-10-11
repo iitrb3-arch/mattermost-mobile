@@ -26,20 +26,29 @@ jobs:
           git config --global user.email "iitrb3@gmail.com"
           git config --global user.name "iitrb3-arch"
 
-      - name: Disable Solidarity checks
+      # فقط preinstall (Solidarity) را خاموش می‌کنیم، بقیه اسکریپت‌ها بمانند
+      - name: Disable only Solidarity preinstall
         run: |
           if [ -f package.json ]; then
-            sed -i '/"preinstall"/d' package.json || true
+            node - <<'NODE'
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('package.json','utf8'));
+            if (p.scripts && p.scripts.preinstall) {
+              delete p.scripts.preinstall;
+              fs.writeFileSync('package.json', JSON.stringify(p, null, 2));
+              console.log('Removed scripts.preinstall');
+            } else {
+              console.log('No scripts.preinstall to remove');
+            }
+            NODE
           fi
-          if [ -f scripts/preinstall.sh ]; then
-            echo "exit 0" > scripts/preinstall.sh
-          fi
+          if [ -f scripts/preinstall.sh ]; then echo "exit 0" > scripts/preinstall.sh; fi
           export SKIP_SOLIDARITY=1
 
-      - name: Install dependencies
+      - name: Install dependencies (allow postinstall/build scripts)
         run: |
           export SKIP_SOLIDARITY=1
-          yarn install --ignore-engines --ignore-scripts
+          yarn install --ignore-engines
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -57,33 +66,43 @@ jobs:
             -keypass mypass123 \
             -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
 
-      - name: Patch Gradle configs
+      - name: Patch Gradle configs (sdk 34 + mavenCentral)
         run: |
-          echo "Patching Gradle configuration files..."
-          find . -type f -name "build.gradle" -print0 | while IFS= read -r -d '' file; do
-            sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' "$file" || true
-            sed -i 's/targetSdkVersion *[0-9][0-9]*/targetSdkVersion 34/' "$file" || true
-            sed -i 's/jcenter()/mavenCentral()/' "$file" || true
+          echo "Patching Gradle build files..."
+          find . -type f -name "build.gradle" -print0 | while IFS= read -r -d '' f; do
+            sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' "$f" || true
+            sed -i 's/targetSdkVersion *[0-9][0-9]*/targetSdkVersion 34/' "$f" || true
+            sed -i 's/jcenter()/mavenCentral()/' "$f" || true
           done
 
-      # 🔥 مشخص‌کردن entry فایل به صورت دستی
-      - name: Build JS bundle manually
+      # اگر اسکریپت‌های ریپو dist را نساختند، فول‌بک می‌زنیم
+      - name: Ensure dist/assets exists (fallback for @assets alias)
         run: |
-          export NODE_OPTIONS="--max_old_space_size=4096"
-          mkdir -p android/app/src/main/assets
-          echo "📦 Building JS bundle using entry: share_extension/index.tsx"
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file share_extension/index.tsx \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res \
-            --reset-cache
+          set -e
+          mkdir -p dist/assets
+          if [ -d app/assets ]; then
+            rsync -a --delete app/assets/ dist/assets/ || true
+          elif [ -d assets ]; then
+            rsync -a --delete assets/ dist/assets/ || true
+          fi
+          # حداقل i18n را بساز
+          if [ ! -d dist/assets/i18n ]; then
+            mkdir -p dist/assets/i18n
+            if [ -d app/assets/i18n ]; then cp -f app/assets/i18n/*.json dist/assets/i18n/ 2>/dev/null || true; fi
+            if [ -d assets/i18n ]; then cp -f assets/i18n/*.json dist/assets/i18n/ 2>/dev/null || true; fi
+          fi
+          echo "dist/assets contents:"
+          find dist/assets -maxdepth 2 -type f | sed 's/^/ - /' || true
 
-      - name: Build Android Release APK
+      - name: Clean caches (metro/gradle) and raise Node memory
+        run: |
+          rm -rf $HOME/.gradle/caches/ || true
+          rm -rf node_modules/.cache || true
+          echo "NODE_OPTIONS=--max_old_space_size=4096" >> $GITHUB_ENV
+
+      - name: Build Android Release APK (let Gradle bundle JS)
         working-directory: android
         run: |
-          export NODE_OPTIONS="--max_old_space_size=4096"
           ./gradlew clean
           ./gradlew assembleRelease --no-daemon --warning-mode all \
             -Pandroid.injected.signing.store.file=../release.keystore \
