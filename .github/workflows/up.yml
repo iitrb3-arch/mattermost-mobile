@@ -66,17 +66,33 @@ jobs:
             sed -i 's/jcenter()/mavenCentral()/' "$file" || true
           done
 
-      # 👇 جدید: نمایش دقیق فایل‌های جاوااسکریپت برای یافتن entry file
-      - name: Deep debug - show all JS files (depth 5)
+      # 🔥 مشخص‌کردن entry فایل به صورت دستی
+      - name: Build JS bundle manually
         run: |
-          echo "📂 Listing all possible entry files up to 5 levels deep..."
-          find . -maxdepth 5 -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.tsx" \) | sort
-          echo "✅ Above is your file list. Look for something like index.js, app.js, main.js, or mattermost.js"
-          echo "⚠️ Copy the correct relative path (like src/app/index.js) and send it to me."
+          export NODE_OPTIONS="--max_old_space_size=4096"
+          mkdir -p android/app/src/main/assets
+          echo "📦 Building JS bundle using entry: share_extension/index.tsx"
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file share_extension/index.tsx \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res \
+            --reset-cache
 
-      # ⛔️ در این مرحله دیگه حدس نمی‌زنه؛ فقط نمایش می‌ده
-      - name: Stop build if entry not set
+      - name: Build Android Release APK
+        working-directory: android
         run: |
-          echo "❌ No entry file set yet. Please check the 'Deep debug' step output above."
-          echo "ℹ️ Once you find the correct entry file, tell me its path (for example: src/app/mattermost.js)"
-          exit 1
+          export NODE_OPTIONS="--max_old_space_size=4096"
+          ./gradlew clean
+          ./gradlew assembleRelease --no-daemon --warning-mode all \
+            -Pandroid.injected.signing.store.file=../release.keystore \
+            -Pandroid.injected.signing.store.password=mypass123 \
+            -Pandroid.injected.signing.key.alias=matterkey \
+            -Pandroid.injected.signing.key.password=mypass123
+
+      - name: Upload Signed Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mattermost-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
