@@ -26,7 +26,7 @@ jobs:
           git config --global user.email "iitrb3@gmail.com"
           git config --global user.name "iitrb3-arch"
 
-      # فقط preinstall (Solidarity) را خاموش می‌کنیم، بقیه اسکریپت‌ها بمانند
+      # فقط preinstall (که solidarity و cocoapods می‌زند) را برمی‌داریم
       - name: Disable only Solidarity preinstall
         run: |
           if [ -f package.json ]; then
@@ -45,7 +45,8 @@ jobs:
           if [ -f scripts/preinstall.sh ]; then echo "exit 0" > scripts/preinstall.sh; fi
           export SKIP_SOLIDARITY=1
 
-      - name: Install dependencies (allow postinstall/build scripts)
+      # مهم: اسکریپت‌ها را غیرفعال نکن! postinstall باید اجرا شود تا dist/assets ساخته شود
+      - name: Install dependencies (allow postinstall)
         run: |
           export SKIP_SOLIDARITY=1
           yarn install --ignore-engines
@@ -66,41 +67,44 @@ jobs:
             -keypass mypass123 \
             -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
 
-      - name: Patch Gradle configs (sdk 34 + mavenCentral)
-        run: |
-          echo "Patching Gradle build files..."
-          find . -type f -name "build.gradle" -print0 | while IFS= read -r -d '' f; do
-            sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' "$f" || true
-            sed -i 's/targetSdkVersion *[0-9][0-9]*/targetSdkVersion 34/' "$f" || true
-            sed -i 's/jcenter()/mavenCentral()/' "$f" || true
-          done
-
-      # اگر اسکریپت‌های ریپو dist را نساختند، فول‌بک می‌زنیم
-      - name: Ensure dist/assets exists (fallback for @assets alias)
+      # فول‌بک مطمئن برای ساخت dist/assets و کپی فونت/صدا (اگر postinstall کافی نبود)
+      - name: Ensure dist assets + fonts + sounds (fallback)
         run: |
           set -e
-          mkdir -p dist/assets
-          if [ -d app/assets ]; then
-            rsync -a --delete app/assets/ dist/assets/ || true
-          elif [ -d assets ]; then
-            rsync -a --delete assets/ dist/assets/ || true
+          # فونت Compass Icons
+          COMPASS_ICONS="node_modules/@mattermost/compass-icons/font/compass-icons.ttf"
+          if [ -f "$COMPASS_ICONS" ]; then
+            mkdir -p assets/fonts android/app/src/main/assets/fonts
+            cp -f "$COMPASS_ICONS" assets/fonts/ || true
+            cp -f "$COMPASS_ICONS" android/app/src/main/assets/fonts/ || true
+            echo "✔ Compass Icons copied"
+          else
+            echo "⚠ Compass Icons not found at $COMPASS_ICONS (will continue)"
           fi
-          # حداقل i18n را بساز
-          if [ ! -d dist/assets/i18n ]; then
-            mkdir -p dist/assets/i18n
-            if [ -d app/assets/i18n ]; then cp -f app/assets/i18n/*.json dist/assets/i18n/ 2>/dev/null || true; fi
-            if [ -d assets/i18n ]; then cp -f assets/i18n/*.json dist/assets/i18n/ 2>/dev/null || true; fi
-          fi
-          echo "dist/assets contents:"
-          find dist/assets -maxdepth 2 -type f | sed 's/^/ - /' || true
 
-      - name: Clean caches (metro/gradle) and raise Node memory
+          # ساخت/به‌روزرسانی dist/assets طبق babel alias '@assets' -> ./dist/assets/
+          mkdir -p dist/assets
+          if [ -f scripts/generate-assets.js ]; then
+            node scripts/generate-assets.js || true
+          fi
+
+          # کپی صداها برای اندروید (res/raw)
+          if [ -d assets/sounds ]; then
+            mkdir -p android/app/src/main/res/raw/
+            cp -f assets/sounds/* android/app/src/main/res/raw/ || true
+          fi
+
+          echo "── dist/assets sample:"
+          find dist/assets -maxdepth 2 -type f | head -n 30 || true
+
+      - name: Clean caches and raise Node memory
         run: |
           rm -rf $HOME/.gradle/caches/ || true
           rm -rf node_modules/.cache || true
           echo "NODE_OPTIONS=--max_old_space_size=4096" >> $GITHUB_ENV
 
-      - name: Build Android Release APK (let Gradle bundle JS)
+      # ❗️باندل دستی نزن! Gradle خودش با entry درست (../../index.ts) باندل می‌سازد
+      - name: Build Android Release APK
         working-directory: android
         run: |
           ./gradlew clean
