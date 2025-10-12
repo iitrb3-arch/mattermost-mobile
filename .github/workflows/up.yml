@@ -3,7 +3,7 @@ name: Build Mattermost Mobile APK (Release Signed)
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]   # اگر شاخه‌ات چیز دیگری‌ست همین‌جا عوضش کن
+    branches: [ main ]   # اگر شاخه‌ات چیز دیگری است، عوضش کن
 
 jobs:
   build:
@@ -26,7 +26,7 @@ jobs:
           git config --global user.email "iitrb3@gmail.com"
           git config --global user.name "iitrb3-arch"
 
-      # فقط preinstall (Solidarity و مشابه) حذف می‌شود؛ سایر اسکریپت‌ها اجرا می‌مانند
+      # فقط preinstall (Solidarity و مشابه) حذف می‌شود؛ باقی اسکریپت‌ها بمانند
       - name: Disable only Solidarity preinstall
         run: |
           if [ -f package.json ]; then
@@ -56,7 +56,7 @@ jobs:
             -keypass mypass123 \
             -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
 
-      # فول‌بک ایمن اگر dist/assets توسط اسکریپت‌ها ساخته نشد
+      # فول‌بک ایمن برای @assets (در صورت عدم تولید توسط اسکریپت‌های ریپو)
       - name: Ensure dist assets + fonts + sounds (fallback)
         run: |
           set -e
@@ -65,60 +65,22 @@ jobs:
             mkdir -p assets/fonts android/app/src/main/assets/fonts
             cp -f "$COMPASS_ICONS" assets/fonts/ || true
             cp -f "$COMPASS_ICONS" android/app/src/main/assets/fonts/ || true
-            echo "✔ Compass Icons copied"
           fi
-
           mkdir -p dist/assets
           if [ -f scripts/generate-assets.js ]; then
             node scripts/generate-assets.js || true
           fi
-
-          # حداقل i18n را تضمین کن
           if [ ! -d dist/assets/i18n ]; then
             mkdir -p dist/assets/i18n
             if [ -d app/assets/i18n ]; then cp -f app/assets/i18n/*.json dist/assets/i18n/ 2>/dev/null || true; fi
             if [ -d assets/i18n ]; then cp -f assets/i18n/*.json dist/assets/i18n/ 2>/dev/null || true; fi
           fi
-
-          # صداها برای اندروید (res/raw)
           if [ -d assets/sounds ]; then
             mkdir -p android/app/src/main/res/raw/
             cp -f assets/sounds/* android/app/src/main/res/raw/ || true
           fi
-
           echo "NODE_OPTIONS=--max_old_space_size=4096" >> "$GITHUB_ENV"
-          echo "── dist/assets sample:"
-          find dist/assets -maxdepth 2 -type f | sed 's/^/ - /' | head -n 50 || true
+          echo "── dist/assets sample:"; find dist/assets -maxdepth 2 -type f | sed 's/^/ - /' | head -n 50 || true
 
-      - name: Clean caches
-        run: |
-          rm -rf $HOME/.gradle/caches/ || true
-          rm -rf node_modules/.cache || true
-
-      # ❗️باندل دستی نزن؛ Gradle خودش با entry پروژه (index.ts) باندل را می‌سازد
-      - name: Build Android Release APK
-        working-directory: android
-        run: |
-          ./gradlew clean
-          ./gradlew assembleRelease --no-daemon --warning-mode all \
-            -Pandroid.injected.signing.store.file=../release.keystore \
-            -Pandroid.injected.signing.store.password=mypass123 \
-            -Pandroid.injected.signing.key.alias=matterkey \
-            -Pandroid.injected.signing.key.password=mypass123
-
-      - name: Upload Signed Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: mattermost-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
-
-      # (اختیاری) برای مارکت‌ها AAB هم خروجی بگیر
-      - name: Build Android App Bundle (AAB)
-        working-directory: android
-        run: ./gradlew bundleRelease --no-daemon --warning-mode all
-
-      - name: Upload Signed Release AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: mattermost-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
+      # ✅ باندل دستی با entry درست (index.ts) تا مترو خطا نده
+      - name: Build JS bundle manually (in
