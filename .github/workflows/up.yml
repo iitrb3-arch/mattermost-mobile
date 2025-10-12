@@ -26,29 +26,18 @@ jobs:
           git config --global user.email "iitrb3@gmail.com"
           git config --global user.name "iitrb3-arch"
 
-      # فقط preinstall (که solidarity و cocoapods می‌زند) را برمی‌داریم
+      # ✅ فیکس: حذف فقط preinstall بدون heredoc
       - name: Disable only Solidarity preinstall
         run: |
           if [ -f package.json ]; then
-            node - <<'NODE'
-            const fs = require('fs');
-            const p = JSON.parse(fs.readFileSync('package.json','utf8'));
-            if (p.scripts && p.scripts.preinstall) {
-              delete p.scripts.preinstall;
-              fs.writeFileSync('package.json', JSON.stringify(p, null, 2));
-              console.log('Removed scripts.preinstall');
-            } else {
-              console.log('No scripts.preinstall to remove');
-            }
-            NODE
+            node -e "const fs=require('fs');const f='package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));if(p.scripts&&p.scripts.preinstall){delete p.scripts.preinstall;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Removed scripts.preinstall');}else{console.log('No scripts.preinstall to remove');}"
           fi
-          if [ -f scripts/preinstall.sh ]; then echo "exit 0" > scripts/preinstall.sh; fi
-          export SKIP_SOLIDARITY=1
+          if [ -f scripts/preinstall.sh ]; then echo 'exit 0' > scripts/preinstall.sh; fi
+          echo "SKIP_SOLIDARITY=1" >> "$GITHUB_ENV"
 
-      # مهم: اسکریپت‌ها را غیرفعال نکن! postinstall باید اجرا شود تا dist/assets ساخته شود
+      # اسکریپت‌ها را غیرفعال نکن؛ postinstall باید اجرا شود تا dist/assets ساخته شود
       - name: Install dependencies (allow postinstall)
         run: |
-          export SKIP_SOLIDARITY=1
           yarn install --ignore-engines
 
       - name: Set up JDK 17
@@ -66,56 +55,3 @@ jobs:
             -storepass mypass123 \
             -keypass mypass123 \
             -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
-
-      # فول‌بک مطمئن برای ساخت dist/assets و کپی فونت/صدا (اگر postinstall کافی نبود)
-      - name: Ensure dist assets + fonts + sounds (fallback)
-        run: |
-          set -e
-          # فونت Compass Icons
-          COMPASS_ICONS="node_modules/@mattermost/compass-icons/font/compass-icons.ttf"
-          if [ -f "$COMPASS_ICONS" ]; then
-            mkdir -p assets/fonts android/app/src/main/assets/fonts
-            cp -f "$COMPASS_ICONS" assets/fonts/ || true
-            cp -f "$COMPASS_ICONS" android/app/src/main/assets/fonts/ || true
-            echo "✔ Compass Icons copied"
-          else
-            echo "⚠ Compass Icons not found at $COMPASS_ICONS (will continue)"
-          fi
-
-          # ساخت/به‌روزرسانی dist/assets طبق babel alias '@assets' -> ./dist/assets/
-          mkdir -p dist/assets
-          if [ -f scripts/generate-assets.js ]; then
-            node scripts/generate-assets.js || true
-          fi
-
-          # کپی صداها برای اندروید (res/raw)
-          if [ -d assets/sounds ]; then
-            mkdir -p android/app/src/main/res/raw/
-            cp -f assets/sounds/* android/app/src/main/res/raw/ || true
-          fi
-
-          echo "── dist/assets sample:"
-          find dist/assets -maxdepth 2 -type f | head -n 30 || true
-
-      - name: Clean caches and raise Node memory
-        run: |
-          rm -rf $HOME/.gradle/caches/ || true
-          rm -rf node_modules/.cache || true
-          echo "NODE_OPTIONS=--max_old_space_size=4096" >> $GITHUB_ENV
-
-      # ❗️باندل دستی نزن! Gradle خودش با entry درست (../../index.ts) باندل می‌سازد
-      - name: Build Android Release APK
-        working-directory: android
-        run: |
-          ./gradlew clean
-          ./gradlew assembleRelease --no-daemon --warning-mode all \
-            -Pandroid.injected.signing.store.file=../release.keystore \
-            -Pandroid.injected.signing.store.password=mypass123 \
-            -Pandroid.injected.signing.key.alias=matterkey \
-            -Pandroid.injected.signing.key.password=mypass123
-
-      - name: Upload Signed Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: mattermost-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
