@@ -26,14 +26,13 @@ jobs:
           git config --global user.email "iitrb3@gmail.com"
           git config --global user.name "iitrb3-arch"
 
-      # فقط preinstall (Solidarity و مشابه) حذف شود؛ بقیه اسکریپت‌ها بمانند
+      # فقط preinstall رو حذف می‌کنیم تا Solidarity اجرا نشه
       - name: Disable only Solidarity preinstall
         run: |
           if [ -f package.json ]; then
             node -e "const fs=require('fs');const f='package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));if(p.scripts&&p.scripts.preinstall){delete p.scripts.preinstall;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Removed scripts.preinstall');}else{console.log('No scripts.preinstall to remove');}"
           fi
           if [ -f scripts/preinstall.sh ]; then echo 'exit 0' > scripts/preinstall.sh; fi
-          echo "SKIP_SOLIDARITY=1" >> "$GITHUB_ENV"
 
       - name: Install dependencies (allow postinstall)
         run: yarn install --ignore-engines
@@ -54,7 +53,7 @@ jobs:
             -keypass mypass123 \
             -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
 
-      # تضمین دارایی‌ها برای alias @assets
+      # فول‌بک برای دارایی‌ها (i18n/فونت/صدا)
       - name: Ensure dist assets + fonts + sounds (fallback)
         run: |
           set -e
@@ -65,9 +64,7 @@ jobs:
             cp -f "$COMPASS_ICONS" android/app/src/main/assets/fonts/ || true
           fi
           mkdir -p dist/assets
-          if [ -f scripts/generate-assets.js ]; then
-            node scripts/generate-assets.js || true
-          fi
+          if [ -f scripts/generate-assets.js ]; then node scripts/generate-assets.js || true; fi
           if [ ! -d dist/assets/i18n ]; then
             mkdir -p dist/assets/i18n
             if [ -d app/assets/i18n ]; then cp -f app/assets/i18n/*.json dist/assets/i18n/ 2>/dev/null || true; fi
@@ -77,69 +74,8 @@ jobs:
             mkdir -p android/app/src/main/res/raw/
             cp -f assets/sounds/* android/app/src/main/res/raw/ || true
           fi
-          echo "NODE_OPTIONS=--max_old_space_size=4096" >> "$GITHUB_ENV"
 
-      - name: Detect JS entry file
-        id: detect_entry
+      # ✅ پلی‌فیل Node برای RN (events) — ارور فعلی‌ات را برطرف می‌کند
+      - name: Ensure 'events' polyfill for React Native
         run: |
-          if [ -f index.ts ]; then
-            echo "ENTRY=index.ts" >> $GITHUB_ENV
-            echo "entry=index.ts"
-          elif [ -f index.js ]; then
-            echo "ENTRY=index.js" >> $GITHUB_ENV
-            echo "entry=index.js"
-          else
-            echo "❌ No entry file (index.ts/js) found at repo root"; ls -la
-            exit 1
-          fi
-
-      - name: Build JS bundle manually
-        run: |
-          mkdir -p android/app/src/main/assets
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file "$ENTRY" \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res \
-            --reset-cache
-
-      - name: Clean caches
-        run: |
-          rm -rf $HOME/.gradle/caches/ || true
-          rm -rf node_modules/.cache || true
-
-      # باندل داخلی Gradle را skip چون خودمان ساختیم
-      - name: Build Android Release APK
-        working-directory: android
-        run: |
-          ./gradlew clean
-          ./gradlew assembleRelease -x :app:createBundleReleaseJsAndAssets \
-            --no-daemon --warning-mode all \
-            -Pandroid.injected.signing.store.file=../release.keystore \
-            -Pandroid.injected.signing.store.password=mypass123 \
-            -Pandroid.injected.signing.key.alias=matterkey \
-            -Pandroid.injected.signing.key.password=mypass123
-
-      - name: Upload Signed Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: mattermost-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
-
-      # اختیاری: AAB
-      - name: Build Android App Bundle (AAB)
-        working-directory: android
-        run: |
-          ./gradlew bundleRelease -x :app:createBundleReleaseJsAndAssets \
-            --no-daemon --warning-mode all \
-            -Pandroid.injected.signing.store.file=../release.keystore \
-            -Pandroid.injected.signing.store.password=mypass123 \
-            -Pandroid.injected.signing.key.alias=matterkey \
-            -Pandroid.injected.signing.key.password=mypass123
-
-      - name: Upload Signed Release AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: mattermost-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          node -e "try{require.resolve('events');process.exit(0)}catch(e){process.exit(1)}" || yarn add events@
