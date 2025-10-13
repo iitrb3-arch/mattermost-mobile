@@ -26,11 +26,10 @@ jobs:
           git config --global user.email "iitrb3@gmail.com"
           git config --global user.name "iitrb3-arch"
 
-      # فقط preinstall رو حذف می‌کنیم تا Solidarity اجرا نشه
       - name: Disable only Solidarity preinstall
         run: |
           if [ -f package.json ]; then
-            node -e "const fs=require('fs');const f='package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));if(p.scripts&&p.scripts.preinstall){delete p.scripts.preinstall;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Removed scripts.preinstall');}else{console.log('No scripts.preinstall to remove');}"
+            node -e "const fs=require('fs');const f='package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));if(p.scripts&&p.scripts.preinstall){delete p.scripts.preinstall;fs.writeFileSync(f,JSON.stringify(p,null,2));}"
           fi
           if [ -f scripts/preinstall.sh ]; then echo 'exit 0' > scripts/preinstall.sh; fi
 
@@ -53,7 +52,6 @@ jobs:
             -keypass mypass123 \
             -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
 
-      # فول‌بک برای دارایی‌ها (i18n/فونت/صدا)
       - name: Ensure dist assets + fonts + sounds (fallback)
         run: |
           set -e
@@ -75,7 +73,82 @@ jobs:
             cp -f assets/sounds/* android/app/src/main/res/raw/ || true
           fi
 
-      # ✅ پلی‌فیل Node برای RN (events) — ارور فعلی‌ات را برطرف می‌کند
       - name: Ensure 'events' polyfill for React Native
         run: |
-          node -e "try{require.resolve('events');process.exit(0)}catch(e){process.exit(1)}" || yarn add events@
+          node -e "try{require.resolve('events');process.exit(0)}catch(e){process.exit(1)}" || yarn add events@3
+
+      - name: Detect JS entry file
+        id: detect_entry
+        run: |
+          if [ -f index.ts ]; then
+            echo "entry=index.ts" >> $GITHUB_OUTPUT
+          elif [ -f index.js ]; then
+            echo "entry=index.js" >> $GITHUB_OUTPUT
+          else
+            echo "❌ No entry file (index.ts/js) at repo root"; ls -la
+            exit 1
+          fi
+
+      - name: Build JS bundle manually
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+        run: |
+          ENTRY="${{ steps.detect_entry.outputs.entry }}"
+          echo "Using entry: $ENTRY"
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file "$ENTRY" \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res \
+            --reset-cache
+
+      - name: Build Android Release APK
+        working-directory: android
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+        run: |
+          ./gradlew clean
+          ./gradlew assembleRelease -x :app:createBundleReleaseJsAndAssets \
+            --no-daemon --warning-mode all \
+            -Pandroid.injected.signing.store.file=../release.keystore \
+            -Pandroid.injected.signing.store.password=mypass123 \
+            -Pandroid.injected.signing.key.alias=matterkey \
+            -Pandroid.injected.signing.key.password=mypass123
+
+      # ✅ اگر فایل نبود، Fail بده (دیگه Successِ بدون Artifact نمی‌بینی)
+      - name: Verify APK exists
+        run: |
+          test -f android/app/build/outputs/apk/release/app-release.apk || (echo "APK not found!" && exit 1)
+
+      - name: Upload Signed Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mattermost-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      # اختیاری: AAB
+      - name: Build Android App Bundle (AAB)
+        working-directory: android
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+        run: |
+          ./gradlew bundleRelease -x :app:createBundleReleaseJsAndAssets \
+            --no-daemon --warning-mode all \
+            -Pandroid.injected.signing.store.file=../release.keystore \
+            -Pandroid.injected.signing.store.password=mypass123 \
+            -Pandroid.injected.signing.key.alias=matterkey \
+            -Pandroid.injected.signing.key.password=mypass123
+
+      - name: Verify AAB exists
+        run: |
+          test -f android/app/build/outputs/bundle/release/app-release.aab || (echo "AAB not found!" && exit 1)
+
+      - name: Upload Signed Release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: mattermost-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
