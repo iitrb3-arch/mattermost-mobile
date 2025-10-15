@@ -4,17 +4,14 @@ buildscript {
         minSdkVersion = 24
         compileSdkVersion = 35
         targetSdkVersion = 35
-        supportLibVersion = "35.0.0"
         kotlinVersion = "1.9.25"
-        kotlin_version = kotlinVersion
-        RNNKotlinVersion = kotlinVersion
         firebaseVersion = "24.1.0"
         ndkVersion = "26.1.10909125"
     }
     repositories {
+        google()
         mavenCentral()
         mavenLocal()
-        google()
     }
     dependencies {
         classpath("com.android.tools.build:gradle")
@@ -30,30 +27,25 @@ buildscript {
 
 allprojects {
     repositories {
-        mavenLocal()
         google()
+        mavenCentral()
+        mavenLocal()
         maven {
             url "$rootDir/../detox/node_modules/detox/Detox-android"
         }
-        maven { url 'https://jitpack.io' }
-    }
-
-    // ✅ اطمینان از اینکه تمام ماژول‌ها با SDK 35 ساخته می‌شن
-    if (project.hasProperty("android")) {
-        project.android {
-            compileSdkVersion 35
-            buildToolsVersion "35.0.0"
-        }
+        maven { url "https://jitpack.io" }
     }
 }
 
-// ✅ فقط برای رفع خطای voximplant
 subprojects {
-    if (project.name.contains("voximplant_react-native-foreground-service")) {
-        if (project.hasProperty("android")) {
-            project.android {
-                compileSdkVersion 35
-                buildToolsVersion "35.0.0"
+    afterEvaluate { project ->
+        if (project.name.contains("voximplant_react-native-foreground-service")) {
+            println("⚙️ Setting compileSdkVersion=35 for ${project.name}")
+            if (project.hasProperty("android")) {
+                project.android {
+                    compileSdkVersion 35
+                    buildToolsVersion "35.0.0"
+                }
             }
         }
     }
