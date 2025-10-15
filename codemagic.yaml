@@ -12,7 +12,8 @@ workflows:
       - name: Install dependencies
         script: |
           cd mattermost-mobile
-          npm ci
+          # نصب بدون اجرای preinstall و solidarity
+          npm install --ignore-scripts
       - name: Build APK
         script: |
           cd mattermost-mobile/android
