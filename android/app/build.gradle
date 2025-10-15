@@ -268,17 +268,3 @@ tasks.register('copyDownloadableDepsToLibs', Copy) {
 }
 
 apply plugin: 'com.google.gms.google-services'
-// ✅ Force compileSdkVersion for Voximplant module (fixes build error)
-gradle.projectsEvaluated {
-    rootProject.allprojects.each { p ->
-        if (p.name.contains("voximplant_react-native-foreground-service")) {
-            println("⚙️ Forcing compileSdkVersion=35 for ${p.name}")
-            if (p.hasProperty("android")) {
-                p.android {
-                    compileSdkVersion 35
-                    buildToolsVersion "35.0.0"
-                }
-            }
-        }
-    }
-}
