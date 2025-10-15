@@ -16,6 +16,6 @@ workflows:
         script: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease -PcompileSdkVersion=35 -PbuildToolsVersion=35.0.0
     artifacts:
       - android/app/build/outputs/**/*.apk
