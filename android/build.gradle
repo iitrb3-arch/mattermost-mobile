@@ -21,9 +21,6 @@ buildscript {
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("com.google.gms:google-services:4.4.2")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
-
-        // NOTE: Do not place your application dependencies here; they belong
-        // in the individual module build.gradle files
     }
 
     configurations.classpath {
@@ -40,25 +37,18 @@ allprojects {
         }
         maven { url 'https://jitpack.io' }
     }
+
+    // ✅ Force SDK settings for all Android subprojects
+    if (project.hasProperty("android")) {
+        project.android {
+            compileSdkVersion 35
+            buildToolsVersion "35.0.0"
+        }
+    }
 }
 
 apply plugin: "com.facebook.react.rootproject"
 
 dependencyLocking {
     lockAllConfigurations()
-}
-
-/**
- * ✅ Force all subprojects to use the same compileSdkVersion and buildToolsVersion
- * This fixes "compile Java 9+ source" errors.
- */
-subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty("android")) {
-            project.android {
-                compileSdkVersion 35
-                buildToolsVersion "35.0.0"
-            }
-        }
-    }
 }
