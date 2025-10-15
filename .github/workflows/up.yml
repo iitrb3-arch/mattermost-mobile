@@ -26,7 +26,7 @@ jobs:
           git config --global user.email "iitrb3@gmail.com"
           git config --global user.name "iitrb3-arch"
 
-      # Solidarity و preinstall را غیر فعال می‌کنیم
+      # Solidarity / preinstall را بی‌اثر می‌کنیم
       - name: Disable only Solidarity preinstall
         run: |
           if [ -f package.json ]; then
@@ -53,6 +53,11 @@ jobs:
             -keypass mypass123 \
             -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
 
+      # بعضی پروژه‌ها compileSdk پایین دارند؛ این سطر بی‌خطر است
+      - name: Patch compileSdkVersion to 34 (safe)
+        run: |
+          sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' android/app/build.gradle || true
+
       - name: Ensure dist assets + fonts + sounds (fallback)
         run: |
           set -e
@@ -74,42 +79,30 @@ jobs:
             cp -f assets/sounds/* android/app/src/main/res/raw/ || true
           fi
 
-      # 1) نصب پُلی‌فیل
-      - name: Ensure 'events' polyfill for React Native
+      # --- Polyfills لازم برای باندل ---
+      - name: Ensure polyfills (events + common shims)
         run: |
-          node -e "try{require.resolve('events');process.exit(0)}catch(e){process.exit(1)}" || yarn add events@3
+          NEED=0
+          node -e "try{require.resolve('events')}catch(e){process.exit(1)}" || NEED=1
+          if [ $NEED -eq 1 ]; then yarn add events@3 buffer util readable-stream assert process; fi
 
-      # 2) ساخت مترو کانفیگ موقت و merge با کانفیگ پروژه (اگر هست)
-      - name: Create metro override (map node core 'events')
+      - name: Create minimal metro override
         run: |
           cat > metro.override.config.js <<'EOF'
-          let base = {};
-          try { base = require('./metro.config'); } catch (e) {}
-
-          // تلاش برای گرفتن getDefaultConfig از @react-native/metro-config
-          let getDefaultConfig, mergeConfig;
-          try {
-            ({getDefaultConfig, mergeConfig} = require('@react-native/metro-config'));
-          } catch (e) {
-            //Fallback برای نسخه‌های قدیمی
-            ({getDefaultConfig, mergeConfig} = require('metro-config'));
-          }
-
-          const path = require('path');
-          const defaultConfig = getDefaultConfig(__dirname);
-          const merged = (mergeConfig ? mergeConfig(defaultConfig, base) : {...defaultConfig, ...base});
-
-          const eventsPath = require.resolve('events/');
-          merged.resolver = {
-            ...(merged.resolver || {}),
-            extraNodeModules: {
-              ...((merged.resolver && merged.resolver.extraNodeModules) || {}),
-              events: eventsPath,
+          module.exports = {
+            resolver: {
+              extraNodeModules: {
+                events: require.resolve('events/'),
+                buffer: require.resolve('buffer/'),
+                util: require.resolve('util/'),
+                stream: require.resolve('readable-stream'),
+                assert: require.resolve('assert/'),
+                process: require.resolve('process/browser'),
+              },
             },
           };
-
-          module.exports = merged;
           EOF
+          node -e "console.log('events ->', require.resolve('events/'))"
 
       - name: Detect JS entry file
         id: detect_entry
@@ -163,7 +156,7 @@ jobs:
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
-      # (اختیاری) ساخت AAB
+      # (اختیاری) AAB
       - name: Build Android App Bundle (AAB)
         working-directory: android
         env:
