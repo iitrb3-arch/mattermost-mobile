@@ -11,13 +11,11 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
-          cd mattermost-mobile
-          # نصب بدون اجرای preinstall و solidarity
           npm install --ignore-scripts
       - name: Build APK
         script: |
-          cd mattermost-mobile/android
+          cd android
           chmod +x gradlew
           ./gradlew assembleRelease
     artifacts:
-      - mattermost-mobile/android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/**/*.apk
