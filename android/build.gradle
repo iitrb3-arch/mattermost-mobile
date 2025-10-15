@@ -38,11 +38,23 @@ allprojects {
         maven { url 'https://jitpack.io' }
     }
 
-    // ✅ Force SDK settings for all Android subprojects
+    // ✅ اطمینان از اینکه تمام ماژول‌ها با SDK 35 ساخته می‌شن
     if (project.hasProperty("android")) {
         project.android {
             compileSdkVersion 35
             buildToolsVersion "35.0.0"
+        }
+    }
+}
+
+// ✅ فقط برای رفع خطای voximplant
+subprojects {
+    if (project.name.contains("voximplant_react-native-foreground-service")) {
+        if (project.hasProperty("android")) {
+            project.android {
+                compileSdkVersion 35
+                buildToolsVersion "35.0.0"
+            }
         }
     }
 }
