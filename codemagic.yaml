@@ -2,13 +2,21 @@ workflows:
   build-android:
     name: Build Android APK
     environment:
-      flutter: stable
+      vars:
+        NODE_OPTIONS: --max-old-space-size=4096
+      node: latest
+      java: 17
+      groups:
+        - default
     scripts:
-      - name: Get dependencies
+      - name: Install dependencies
         script: |
-          flutter pub get
+          cd mattermost-mobile
+          npm install
       - name: Build APK
         script: |
-          flutter build apk --release
+          cd mattermost-mobile/android
+          chmod +x gradlew
+          ./gradlew assembleRelease
     artifacts:
-      - build/app/outputs/flutter-apk/app-release.apk
+      - mattermost-mobile/android/app/build/outputs/**/*.apk
