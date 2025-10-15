@@ -12,10 +12,18 @@ workflows:
       - name: Install dependencies
         script: |
           npm install --ignore-scripts
+      - name: Pre-bundle assets
+        script: |
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.ts \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res/
       - name: Build APK
         script: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease -PcompileSdkVersion=35 -PbuildToolsVersion=35.0.0
+          ./gradlew assembleRelease
     artifacts:
       - android/app/build/outputs/**/*.apk
