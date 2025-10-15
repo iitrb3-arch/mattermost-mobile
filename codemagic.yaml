@@ -14,6 +14,10 @@ workflows:
           npm install --ignore-scripts
       - name: Pre-bundle assets
         script: |
+          # پاک کردن خروجی قبلی تا مسیر اشتباه cache نشه
+          rm -rf android/app/src/main/assets
+          mkdir -p android/app/src/main/assets
+          # ساخت دستی باندل با مسیر درست
           npx react-native bundle \
             --platform android \
             --dev false \
