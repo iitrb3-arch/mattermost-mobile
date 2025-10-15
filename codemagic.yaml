@@ -12,18 +12,25 @@ workflows:
       - name: Install dependencies
         script: |
           npm install --ignore-scripts
-      - name: Pre-bundle assets
+      - name: Fix Metro path and Pre-bundle assets
         script: |
-          # پاک کردن خروجی قبلی تا مسیر اشتباه cache نشه
+          # حذف پوشه خروجی قبلی
           rm -rf android/app/src/main/assets
           mkdir -p android/app/src/main/assets
-          # ساخت دستی باندل با مسیر درست
+          
+          # تنظیم مسیر فعلی برای metro تا مطمئن باشه از root اجرا میشه
+          cd app
+          echo "✅ Running bundle from $(pwd)"
+          
+          # اجرای باندل با مسیر صحیح
           npx react-native bundle \
             --platform android \
             --dev false \
-            --entry-file index.ts \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res/
+            --entry-file ../index.ts \
+            --bundle-output ../android/app/src/main/assets/index.android.bundle \
+            --assets-dest ../android/app/src/main/res/
+          
+          cd ..
       - name: Build APK
         script: |
           cd android
