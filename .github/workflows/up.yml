@@ -63,8 +63,10 @@ jobs:
           fi
 
       - name: Add polyfills & events package
+        env:
+          SKIP_SOLIDARITY: '1'
         run: |
-          yarn add -D events
+          yarn add -D events || npm i -D events --ignore-scripts --no-audit --no-fund
           cat > polyfills.js <<'EOF'
           if (typeof globalThis.process === 'undefined') {
             globalThis.process = { env: {} };
