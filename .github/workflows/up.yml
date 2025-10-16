@@ -14,7 +14,6 @@ jobs:
     env:
       JAVA_DISTRIBUTION: temurin
       JAVA_VERSION: '17'
-      # امضای ساده‌ی محلی — اگر Secrets نداری، همین‌ها استفاده میشن
       KEY_ALIAS: iitrb3-arch
       KEY_PASS: android
       STORE_PASS: android
@@ -32,11 +31,17 @@ jobs:
       - name: Install yarn
         run: npm i -g yarn
 
+      - name: Configure Git identity
+        run: |
+          git config --global user.email "iitrb3@gmail.com"
+          git config --global user.name "iitrb3-arch"
+
       - name: Install dependencies (skip solidarity)
         env:
           SKIP_SOLIDARITY: '1'
+          CI: 'true'
         run: |
-          yarn install --frozen-lockfile || yarn install
+          yarn install --ignore-scripts --frozen-lockfile || yarn install --ignore-scripts
 
       - name: Ensure android assets folders
         run: |
@@ -59,9 +64,7 @@ jobs:
 
       - name: Add polyfills & events package
         run: |
-          # نیاز برای import 'events' داخل @mattermost/calls
           yarn add -D events
-          # polyfills ساده
           cat > polyfills.js <<'EOF'
           if (typeof globalThis.process === 'undefined') {
             globalThis.process = { env: {} };
@@ -69,12 +72,11 @@ jobs:
           try { const {Buffer} = require('buffer'); if (typeof globalThis.Buffer === 'undefined') globalThis.Buffer = Buffer; } catch(e){}
           EOF
 
-      - name: Create metro override (✅ assetRegistryPath inside transformer)
+      - name: Create metro override (assetRegistryPath + resolver)
         shell: bash
         run: |
           cat > metro.override.config.js <<'EOF'
           const path = require('path');
-
           module.exports = {
             transformer: {
               assetRegistryPath: require.resolve('react-native/Libraries/Image/AssetRegistry'),
@@ -110,7 +112,6 @@ jobs:
             if [ -f "$f" ]; then ENTRY="$f"; break; fi
           done
           if [ -z "$ENTRY" ]; then
-            # آخرین تلاش: اسکن سریع
             ENTRY=$(git ls-files | grep -E '/index\.(ts|tsx|js)$' | head -n1 || true)
           fi
           if [ -z "$ENTRY" ]; then
