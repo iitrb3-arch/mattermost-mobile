@@ -11,14 +11,12 @@ jobs:
 
     env:
       NODE_OPTIONS: "--max_old_space_size=4096"
-      ENTRY: "index.ts" # اگر ورودی‌تون فرق داره همین‌جا عوض کنید
+      ENTRY: "index.ts" # اگر ورودی فرق دارد این را عوض کن (مثلاً app/index.tsx)
 
     steps:
-      # 1) کد
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2) Node/Yarn
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -27,33 +25,42 @@ jobs:
       - name: Install yarn
         run: npm i -g yarn
 
-      # 3) Git identity (برای اسکریپت‌های پیش‌نیاز بعضی پروژه‌ها)
       - name: Configure Git identity
         run: |
           git config --global user.email "iitrb3@gmail.com"
           git config --global user.name  "iitrb3-arch"
 
-      # 4) فقط preinstall مربوط به Solidarity رو غیرفعال کن
+      # ✅ فیکس شده: حذف فقط preinstall به‌صورت امن (بدون خطای SyntaxError)
       - name: Disable only Solidarity preinstall
+        shell: bash
         run: |
           if [ -f package.json ]; then
-            node -e "const fs=require('fs');const f='package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));if(p.scripts&&p.scripts.preinstall){delete p.scripts.preinstall;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Removed scripts.preinstall')}}"
+            node - <<'NODE'
+            const fs = require('fs');
+            const f = 'package.json';
+            if (!fs.existsSync(f)) process.exit(0);
+            const p = JSON.parse(fs.readFileSync(f, 'utf8'));
+            if (p.scripts && p.scripts.preinstall) {
+              delete p.scripts.preinstall;
+              fs.writeFileSync(f, JSON.stringify(p, null, 2));
+              console.log('Removed scripts.preinstall');
+            } else {
+              console.log('No scripts.preinstall found; skipping');
+            }
+            NODE
           fi
 
-      # 5) نصب دیپندنسی‌ها
       - name: Install dependencies (allow postinstall)
         run: |
           export SKIP_SOLIDARITY=1
           yarn install --frozen-lockfile || yarn install
 
-      # 6) جاوا برای گریدل
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      # 7) کی‌استور ریلیز (خودکار؛ اگر کی‌استور واقعی دارید، این مرحله را با Secrets خودتان جایگزین کنید)
       - name: Generate keystore
         working-directory: android/app
         run: |
@@ -69,43 +76,31 @@ jobs:
           echo "MYAPP_UPLOAD_STORE_PASSWORD=123456"      >> ../gradle.properties
           echo "MYAPP_UPLOAD_KEY_PASSWORD=123456"        >> ../gradle.properties
 
-      # 8) مطمئن شو پوشه‌های assets/res موجودن (تا کپیِ باندل و تصاویر ایراد نگیره)
       - name: Ensure android assets folders
         run: |
           mkdir -p android/app/src/main/assets
           mkdir -p android/app/src/main/res
 
-      # 9) کپی دارایی‌ها به dist اگر نبودن (فالبک برای آیکن‌ها و فونت‌ها و صداها)
       - name: Ensure dist assets + fonts + sounds (fallback)
         run: |
           mkdir -p dist/assets/images dist/assets/fonts dist/assets/sounds
-          # اگر مسیرهای پایه دارید اینجا کپی کنید (exists-then-copy):
           [ -d assets/images ] && rsync -a --ignore-missing-args assets/images/ dist/assets/images/ || true
           [ -d assets/fonts  ] && rsync -a --ignore-missing-args assets/fonts/  dist/assets/fonts/  || true
           [ -d assets/sounds ] && rsync -a --ignore-missing-args assets/sounds/ dist/assets/sounds/ || true
 
-      # 10) پُلی‌فیل‌ها و شیم‌های عمومی
       - name: Ensure polyfills (events + common shims)
         run: |
           yarn add -D events
           echo "window.global = window.global || window;" > polyfills.js
 
-      # 11) ساخت یک کانفیگ مترو مینیمال با assetRegistryPath و پُلی‌فیل events
       - name: Create minimal metro override
         run: |
           cat > metro.override.config.js <<'EOF'
           const path = require('path');
-
           module.exports = {
             resolver: {
-              // Fix for: missing-asset-registry-path
-              assetRegistryPath: require.resolve(
-                'react-native/Libraries/Image/AssetRegistry'
-              ),
-              // Polyfill for 'events' module
-              extraNodeModules: {
-                events: require.resolve('events/'),
-              },
+              assetRegistryPath: require.resolve('react-native/Libraries/Image/AssetRegistry'),
+              extraNodeModules: { events: require.resolve('events/') },
             },
             serializer: {
               getModulesRunBeforeMainModule: () => [
@@ -115,7 +110,6 @@ jobs:
           };
           EOF
 
-      # 12) تشخیص ورودی باندل (اگر فایل YOUR_ENTRY فرق دارد، بالای فایل در env تغییر دهید)
       - name: Detect JS entry file
         id: detect_entry
         run: |
@@ -125,7 +119,6 @@ jobs:
           else
             echo "⛔ Entry file '$ENTRY' not found"; exit 1; fi
 
-      # 13) باندل JS با مترو و کانفیگ override شده
       - name: Bundle JS (metro override)
         run: |
           npx react-native bundle \
@@ -136,19 +129,16 @@ jobs:
             --assets-dest android/app/src/main/res \
             --config metro.override.config.js
 
-      # 14) سازگاری compileSdkVersion (حداقل 30؛ اینجا می‌بریم 34)
       - name: Patch compileSdkVersion to 34
         run: |
           sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/g' android/app/build.gradle || true
 
-      # 15) پاکسازی کش‌ها و اجرای بیلد ریلیز
       - name: Build Android Release APK
         working-directory: android
         run: |
           ./gradlew clean
           ./gradlew assembleRelease --warning-mode all
 
-      # 16) آرتیفکت‌ها
       - name: Upload Signed Release APK
         uses: actions/upload-artifact@v4
         with:
@@ -156,7 +146,6 @@ jobs:
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
-      # (اختیاری) خروجی AAB
       - name: Build Android App Bundle (AAB)
         working-directory: android
         run: ./gradlew bundleRelease --warning-mode all
