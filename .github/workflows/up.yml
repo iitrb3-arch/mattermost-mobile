@@ -9,170 +9,161 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      NODE_OPTIONS: "--max_old_space_size=4096"
+      ENTRY: "index.ts" # اگر ورودی‌تون فرق داره همین‌جا عوض کنید
+
     steps:
+      # 1) کد
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2) Node/Yarn
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
       - name: Install yarn
-        run: npm install -g yarn
+        run: npm i -g yarn
 
+      # 3) Git identity (برای اسکریپت‌های پیش‌نیاز بعضی پروژه‌ها)
       - name: Configure Git identity
         run: |
           git config --global user.email "iitrb3@gmail.com"
           git config --global user.name  "iitrb3-arch"
 
-      # فقط preinstall مربوط به Solidarity را غیرفعال کن
+      # 4) فقط preinstall مربوط به Solidarity رو غیرفعال کن
       - name: Disable only Solidarity preinstall
         run: |
           if [ -f package.json ]; then
-            node -e "const fs=require('fs');const f='package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));if(p.scripts&&p.scripts.preinstall){delete p.scripts.preinstall;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Removed scripts.preinstall');}else{console.log('No scripts.preinstall');}"
+            node -e "const fs=require('fs');const f='package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));if(p.scripts&&p.scripts.preinstall){delete p.scripts.preinstall;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Removed scripts.preinstall')}}"
           fi
-          if [ -f scripts/preinstall.sh ]; then echo 'exit 0' > scripts/preinstall.sh; fi
 
+      # 5) نصب دیپندنسی‌ها
       - name: Install dependencies (allow postinstall)
-        run: yarn install --ignore-engines
-
-      # ---- پلی‌فیل‌های لازم برای مترو/ری‌اکت‌نیتیو ----
-      - name: Install polyfills (events + common shims)
         run: |
-          npm i --no-audit --no-fund --save-dev \
-            events@3 buffer util readable-stream assert process
-          # تایید نصب (بدون اسلش!)
-          node -e "require.resolve('events')"
-          node -e "require.resolve('buffer')"
-          echo "Polyfills OK."
+          export SKIP_SOLIDARITY=1
+          yarn install --frozen-lockfile || yarn install
 
-      # ---- فقط فایل override را بساز؛ هیچ 'node -e' اینجا اجرا نشود ----
+      # 6) جاوا برای گریدل
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # 7) کی‌استور ریلیز (خودکار؛ اگر کی‌استور واقعی دارید، این مرحله را با Secrets خودتان جایگزین کنید)
+      - name: Generate keystore
+        working-directory: android/app
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -storepass 123456 \
+            -keypass 123456 \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias release \
+            -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
+          echo "MYAPP_UPLOAD_STORE_FILE=release.keystore" >> ../gradle.properties
+          echo "MYAPP_UPLOAD_KEY_ALIAS=release"           >> ../gradle.properties
+          echo "MYAPP_UPLOAD_STORE_PASSWORD=123456"      >> ../gradle.properties
+          echo "MYAPP_UPLOAD_KEY_PASSWORD=123456"        >> ../gradle.properties
+
+      # 8) مطمئن شو پوشه‌های assets/res موجودن (تا کپیِ باندل و تصاویر ایراد نگیره)
+      - name: Ensure android assets folders
+        run: |
+          mkdir -p android/app/src/main/assets
+          mkdir -p android/app/src/main/res
+
+      # 9) کپی دارایی‌ها به dist اگر نبودن (فالبک برای آیکن‌ها و فونت‌ها و صداها)
+      - name: Ensure dist assets + fonts + sounds (fallback)
+        run: |
+          mkdir -p dist/assets/images dist/assets/fonts dist/assets/sounds
+          # اگر مسیرهای پایه دارید اینجا کپی کنید (exists-then-copy):
+          [ -d assets/images ] && rsync -a --ignore-missing-args assets/images/ dist/assets/images/ || true
+          [ -d assets/fonts  ] && rsync -a --ignore-missing-args assets/fonts/  dist/assets/fonts/  || true
+          [ -d assets/sounds ] && rsync -a --ignore-missing-args assets/sounds/ dist/assets/sounds/ || true
+
+      # 10) پُلی‌فیل‌ها و شیم‌های عمومی
+      - name: Ensure polyfills (events + common shims)
+        run: |
+          yarn add -D events
+          echo "window.global = window.global || window;" > polyfills.js
+
+      # 11) ساخت یک کانفیگ مترو مینیمال با assetRegistryPath و پُلی‌فیل events
       - name: Create minimal metro override
-        shell: bash
         run: |
           cat > metro.override.config.js <<'EOF'
           const path = require('path');
-          const nm = (m) => path.join(process.cwd(), 'node_modules', m);
+
           module.exports = {
             resolver: {
+              // Fix for: missing-asset-registry-path
+              assetRegistryPath: require.resolve(
+                'react-native/Libraries/Image/AssetRegistry'
+              ),
+              // Polyfill for 'events' module
               extraNodeModules: {
-                events:  nm('events'),
-                buffer:  nm('buffer'),
-                util:    nm('util'),
-                stream:  nm('readable-stream'),
-                assert:  nm('assert'),
-                process: nm('process/browser'),
+                events: require.resolve('events/'),
               },
+            },
+            serializer: {
+              getModulesRunBeforeMainModule: () => [
+                path.resolve(__dirname, 'polyfills.js'),
+              ],
             },
           };
           EOF
-          echo "metro.override.config.js created."
 
-      # ---- دارایی‌ها/فونت‌ها و i18n را امن کپی کن ----
-      - name: Ensure dist assets + fonts + sounds (fallback)
-        run: |
-          set -e
-          mkdir -p dist/assets
-          if [ -d app/assets/i18n ]; then mkdir -p dist/assets/i18n && cp -f app/assets/i18n/*.json dist/assets/i18n/ || true; fi
-          if [ -d assets/i18n ];    then mkdir -p dist/assets/i18n && cp -f assets/i18n/*.json    dist/assets/i18n/ || true; fi
-          COMPASS_ICONS="node_modules/@mattermost/compass-icons/font/compass-icons.ttf"
-          if [ -f "$COMPASS_ICONS" ]; then
-            mkdir -p assets/fonts android/app/src/main/assets/fonts
-            cp -f "$COMPASS_ICONS" assets/fonts/ || true
-            cp -f "$COMPASS_ICONS" android/app/src/main/assets/fonts/ || true
-          fi
-          if [ -d assets/sounds ]; then
-            mkdir -p android/app/src/main/res/raw/
-            cp -f assets/sounds/* android/app/src/main/res/raw/ || true
-          fi
-
+      # 12) تشخیص ورودی باندل (اگر فایل YOUR_ENTRY فرق دارد، بالای فایل در env تغییر دهید)
       - name: Detect JS entry file
         id: detect_entry
         run: |
-          if   [ -f index.ts ]; then   echo "entry=index.ts" >> $GITHUB_OUTPUT
-          elif [ -f index.js ]; then   echo "entry=index.js" >> $GITHUB_OUTPUT
+          if [ -f "$ENTRY" ]; then
+            echo "entry=$ENTRY" >> $GITHUB_ENV
+            echo "Using entry: $ENTRY"
           else
-            echo "❌ No entry file (index.ts/js) at repo root"; ls -la
-            exit 1
-          fi
+            echo "⛔ Entry file '$ENTRY' not found"; exit 1; fi
 
+      # 13) باندل JS با مترو و کانفیگ override شده
       - name: Bundle JS (metro override)
-        env:
-          NODE_OPTIONS: --max_old_space_size=4096
         run: |
-          ENTRY="${{ steps.detect_entry.outputs.entry }}"
-          echo "Using entry: $ENTRY"
-          mkdir -p android/app/src/main/assets
           npx react-native bundle \
-            --config metro.override.config.js \
             --platform android \
             --dev false \
             --entry-file "$ENTRY" \
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res \
-            --reset-cache
+            --config metro.override.config.js
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Generate keystore
-        run: |
-          keytool -genkeypair -v \
-            -keystore release.keystore \
-            -alias matterkey \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass mypass123 \
-            -keypass  mypass123 \
-            -dname "CN=iitrb3-arch, OU=Dev, O=Workspace, L=Tehran, ST=Tehran, C=IR"
-
+      # 14) سازگاری compileSdkVersion (حداقل 30؛ اینجا می‌بریم 34)
       - name: Patch compileSdkVersion to 34
-        run: sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/' android/app/build.gradle || true
+        run: |
+          sed -i 's/compileSdkVersion *[0-9][0-9]*/compileSdkVersion 34/g' android/app/build.gradle || true
 
+      # 15) پاکسازی کش‌ها و اجرای بیلد ریلیز
       - name: Build Android Release APK
         working-directory: android
-        env:
-          NODE_OPTIONS: --max_old_space_size=4096
         run: |
           ./gradlew clean
-          ./gradlew assembleRelease -x :app:createBundleReleaseJsAndAssets \
-            --no-daemon --warning-mode all \
-            -Pandroid.injected.signing.store.file=../release.keystore \
-            -Pandroid.injected.signing.store.password=mypass123 \
-            -Pandroid.injected.signing.key.alias=matterkey \
-            -Pandroid.injected.signing.key.password=mypass123
+          ./gradlew assembleRelease --warning-mode all
 
-      - name: Verify APK exists
-        run: test -f android/app/build/outputs/apk/release/app-release.apk
-
+      # 16) آرتیفکت‌ها
       - name: Upload Signed Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: mattermost-release-apk
+          name: app-release.apk
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
+      # (اختیاری) خروجی AAB
       - name: Build Android App Bundle (AAB)
         working-directory: android
-        env:
-          NODE_OPTIONS: --max_old_space_size=4096
-        run: |
-          ./gradlew bundleRelease -x :app:createBundleReleaseJsAndAssets \
-            --no-daemon --warning-mode all \
-            -Pandroid.injected.signing.store.file=../release.keystore \
-            -Pandroid.injected.signing.store.password=mypass123 \
-            -Pandroid.injected.signing.key.alias=matterkey \
-            -Pandroid.injected.signing.key.password=mypass123
-
-      - name: Verify AAB exists
-        run: test -f android/app/build/outputs/bundle/release/app-release.aab
+        run: ./gradlew bundleRelease --warning-mode all
 
       - name: Upload Signed Release AAB
         uses: actions/upload-artifact@v4
         with:
-          name: mattermost-release-aab
+          name: app-release.aab
           path: android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
+          if-no-files-found: warn
